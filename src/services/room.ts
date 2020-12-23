@@ -60,6 +60,24 @@ type EndGame = {
     session: any
 }
 
+const getWinner = (players: Player[]) => {
+    const filterCount = (identity: string) => {
+        return players.filter(player => player.identify === identity && player.status === 'alive').length;
+    }
+    // check is game ended
+    const normal = filterCount('normal');
+    const spy = filterCount('spy');
+    const blank = filterCount('blank');
+    let winner = '';
+    if (normal === 0) {
+        winner = spy === 0 ? 'blank' : 'spy';
+    }
+    else if (blank === 0 && spy === 0) {
+        winner = 'normal';
+    }
+    return winner;
+}
+
 export const create = async ({ session, user }: Create) => {
     const player = new Player(user);
     const room = new Room({
@@ -91,12 +109,26 @@ export const leave = async ({ session }: Leave) => {
     const { roomId, user } = session;
     const room = new Room(getFile(`/../rooms/${roomId}.json`));
     room.players = room.players.filter(player => player.id !== user.id);
+    let winner = '';
 
     // delete room if no user
     if (!room.players.length) {
         removeFile(`/../rooms/${roomId}.json`);
     }
     else {
+        if (room.status === 'progress') {
+            if (!room.setting.isRandom) {
+                winner = 'spy'
+                room.status = 'end';
+            }
+            else {
+                winner = getWinner(room.players);
+                if (winner) {
+                    room.status = 'end';
+                }
+            }
+        }
+
         // assign next host if leave player is host
         if (room.host === user.id) {
             room.host = room.players[0].id;
@@ -111,7 +143,8 @@ export const leave = async ({ session }: Leave) => {
     return {
         roomId: room.id,
         host: room.host,
-        playerId: user.id
+        playerId: user.id,
+        winner
     };
 }
 
@@ -218,21 +251,9 @@ export const reportPlayer = ({ session, playerId }: ReportPlayer) => {
     const player = room.players.find(player => player.id === playerId);
     player.status = 'dead';
     
-    const filterCount = (identity: string) => {
-        return room.players.filter(player => player.identify === identity && player.status === 'alive').length;
-    }
-    // check is game ended
-    const normal = filterCount('normal');
-    const spy = filterCount('spy');
-    const blank = filterCount('blank');
-    let winner = '';
-    if (normal === 0) {
-        winner = spy === 0 ? 'blank' : 'spy';
+    const winner = getWinner(room.players);
+    if (winner) {
         room.status = 'end';
-    }
-    else if (blank === 0 && spy === 0) {
-        winner = 'normal';
-        room.status = 'end'
     }
 
     saveFile(`/../rooms/${roomId}.json`, room.toJson());

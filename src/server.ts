@@ -110,7 +110,7 @@ io.on("connection", async (socket: any) => {
         const { session } = socket.request;
         const resp = await leave({ session });
         socket.leave(resp.roomId);
-        io.to(roomId).emit('/game/quit', resp);
+        io.to(resp.roomId).emit('/game/quit', resp);
     });
 
     socket.on('/game/host', async (host: string) => {
