@@ -182,6 +182,13 @@ io.on("connection", async (socket: any) => {
         endGame({ session });
         io.to(session.roomId).emit('/game/end', winner);
     });
+
+    socket.on('/message', async (req: any) => {
+        const { session } = socket.request;
+        if (session.roomId) {
+            io.to(session.roomId).emit('/message', req);
+        }
+    })
 });
 
 // public files
