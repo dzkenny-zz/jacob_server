@@ -6,9 +6,10 @@ import * as ExpressSession from 'express-session';
 import * as FileStore from 'session-file-store';
 import * as cookieParser from 'cookie-parser';
 import * as bodyParser from 'body-parser';
-import { auth } from "./services/auth";
+import { auth, updateAvatar, updateUsername } from "./services/auth";
 import * as path from 'path';
-import { create, getRoom, join, leave, startGame, updateBlankNumber, updateHost, updateSpyNumber, updateIsRandom, reportPlayer } from "./services/room";
+import { create, getRoom, join, leave, startGame, updateBlankNumber, updateHost, updateSpyNumber, updateIsRandom, reportPlayer, kickPlayer, endGame } from "./services/room";
+import { checkSession, saveSession } from "./services/session";
 
 const app = express();
 const httpServer = new Server(app);
@@ -44,6 +45,7 @@ io.use(wrap(session));
 // whenever a user connects on port 3000 via
 // a websocket, log that a user has connected
 io.on("connection", async (socket: any) => {
+    await checkSession(socket.request.session);
     // join chatroom
     const { roomId } = socket.request.session;
     if (roomId) {
@@ -60,8 +62,8 @@ io.on("connection", async (socket: any) => {
         socket.emit('/game/create', room);
     });
 
-    socket.on('/game/join', async (roomId: string) => {
-        const user = socket.request.session.user
+    socket.on('/game/join', async (req: any) => {
+        const { roomId, user } = req;
         const { player, room } = await join({
             session: socket.request.session,
             user,
@@ -134,6 +136,52 @@ io.on("connection", async (socket: any) => {
         const resp = await reportPlayer({ session, playerId });
         io.to(session.roomId).emit('/game/report', resp);
     });
+
+    socket.on('/user/username', async (username: string) => {
+        const { session } = socket.request;
+        const { user, roomId } = session;
+        await updateUsername(username, session);
+        if (roomId) {
+            io.to(session.roomId).emit('/player/username', {
+                id: user.id,
+                username
+            });
+        }
+        socket.emit('/user/username', username);
+    });
+
+    socket.on('/user/avatar', async (avatar: string) => {
+        const { session } = socket.request;
+        const { user, roomId } = session;
+        await updateAvatar(avatar, session);
+        if (roomId) {
+            io.to(session.roomId).emit('/player/avatar', {
+                id: user.id,
+                avatar
+            });
+        }
+        socket.emit('/user/avatar', avatar);
+    });
+
+    socket.on('/game/kick', async (playerId: string) => {
+        const { session } = socket.request;
+        const { roomId } = session;
+        await kickPlayer({ session, playerId });
+        io.to(roomId).emit('/game/kick', playerId);
+    });
+
+    socket.on('/game/beKicked', async () => {
+        const { session } = socket.request;
+        socket.leave(session.roomId);
+        session.roomId = null;
+        saveSession(session);
+    });
+
+    socket.on('/game/end', async (winner: string) => {
+        const { session } = socket.request;
+        endGame({ session });
+        io.to(session.roomId).emit('/game/end', winner);
+    });
 });
 
 // public files
@@ -144,8 +192,7 @@ app.get('/', (req: any, res: any) => {
 
 app.post("/login", async (req: any, res: any) => {
     try {
-        const { username } = req.body;
-        const resp = await auth(username, req.session);
+        const resp = await auth(req.session);
         res.status(200).json(resp).end();
     } catch (error) {
         res

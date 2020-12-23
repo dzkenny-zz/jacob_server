@@ -51,6 +51,15 @@ type ReportPlayer = {
     playerId: string
 }
 
+type KickPlayer = {
+    session: any,
+    playerId: string
+}
+
+type EndGame = {
+    session: any
+}
+
 export const create = async ({ session, user }: Create) => {
     const player = new Player(user);
     const room = new Room({
@@ -198,7 +207,6 @@ export const startGame = ({ session, correct, wrong }: StartGame) => {
     temp.forEach(player => player.identify = 'normal');
     room.players = _.concat(players, temp);
     room.players.forEach(player => player.status = 'alive');
-    console.log('players', room.players);
     room.status = 'progress';
 
     saveFile(`/../rooms/${roomId}.json`, room.toJson());
@@ -233,4 +241,20 @@ export const reportPlayer = ({ session, playerId }: ReportPlayer) => {
         end: room.status === 'end',
         winner
     };
+}
+
+export const kickPlayer = ({ session, playerId }: KickPlayer) => {
+    const { roomId } = session;
+    const room = new Room(getFile(`/../rooms/${roomId}.json`));
+    const index = room.players.findIndex(player => player.id === playerId);
+    room.players.splice(index, 1);
+
+    saveFile(`/../rooms/${roomId}.json`, room.toJson());
+}
+
+export const endGame = ({ session }: EndGame) => {
+    const { roomId } = session;
+    const room = new Room(getFile(`/../rooms/${roomId}.json`));
+    room.status = 'end';
+    saveFile(`/../rooms/${roomId}.json`, room.toJson());
 }
