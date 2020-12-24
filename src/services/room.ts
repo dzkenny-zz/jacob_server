@@ -4,7 +4,7 @@ import { Room } from "../models/room";
 import { User } from "../models/user";
 import { saveSession } from "./session";
 import * as _ from 'lodash';
-import { identity } from "lodash";
+import Questions from '../models/questions';
 
 type Create = {
     session: any,
@@ -191,10 +191,20 @@ export const updateHost = ({ session, host }: UpdateHost) => {
 }
 
 const getQuestion = () => {
-    return {
-        correct: '聖誕樹',
-        wrong: '大樹'
-    };
+    const question = Questions[_.random(Questions.length - 1)];
+    const isFirst = _.random(1);
+    if (isFirst) {
+        return {
+            correct: question[0],
+            wrong: question[1]
+        };
+    }
+    else {
+        return {
+            correct: question[1],
+            wrong: question[0]
+        };
+    }
 }
 
 export const startGame = ({ session, correct, wrong }: StartGame) => {
